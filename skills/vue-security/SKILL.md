@@ -1,6 +1,6 @@
 ---
 name: vue-security
-description: "Vue.js security analysis, auditing, and hardening using the OWASP Top 10. Use this skill whenever the user mentions Vue.js security, XSS in Vue, v-html vulnerabilities, client-side template injection (CSTI), Vue Router access control, JWT security in SPAs, Content Security Policy for Vue apps, or any request to audit, review, harden, or pentest a Vue.js application. Also trigger when the user asks about secure authentication patterns in Vue/Pinia, SSRF via Vue features, source map exposure, CORS misconfiguration in Vue+Express/Nuxt stacks or when reviewing Vue component code for injection risks. Trigger even for general SPA security questions if Vue is the framework — this skill contains Vue-specific exploit vectors that generic security advice misses."
+description: "Vue.js security analysis, auditing, and hardening using the OWASP Top 10. Use this skill whenever the user mentions Vue.js security, XSS in Vue, v-html vulnerabilities, client-side template injection (CSTI), Vue Router access control, JWT security in SPAs, Content Security Policy for Vue apps, or any request to audit, review, harden, or pentest a Vue.js application. Also trigger when the user asks about secure authentication patterns in Vue/Pinia, SSRF via Vue features, source map exposure, CORS misconfiguration in Vue+Express/Nuxt stacks, npm dependency auditing, supply-chain attacks in the Vue/Vite ecosystem, malicious Vite plugins, Vue plugin global mixin hijacking, PostCSS/Tailwind build-time risks, or lockfile integrity. Trigger even for general SPA security questions if Vue is the framework — this skill contains Vue-specific exploit vectors (PortSwigger script gadgets, mutation XSS, directive-based injection) and Vue-architecture-specific supply-chain risks that generic security advice misses."
 ---
 
 # Vue.js Security — OWASP Top 10 Applied
@@ -22,7 +22,7 @@ Read the appropriate reference file based on what the user needs:
 | XSS, v-html, template injection, CSTI, script gadgets, mutation XSS, CSP bypass, sanitization, DOMPurify | `references/injection-xss.md` |
 | Route guards, access control, IDOR, privilege escalation, JWT storage, auth flows, session management, MFA, token rotation | `references/access-auth.md` |
 | API keys in bundle, .env secrets, VITE_ exposure, SRI, CDN integrity, Pinia deserialization, CI/CD supply chain, npm audit | `references/data-integrity.md` |
-| Source maps, CORS, security headers, CSP configuration, devtools in prod, outdated npm packages, CVEs, dependency hygiene | `references/config-components.md` |
+| Source maps, CORS, security headers, CSP configuration, devtools in prod, outdated npm packages, CVEs, dependency hygiene, supply-chain attacks, Vite plugin compromise, malicious Vue plugins, global mixin hijacking, PostCSS/Tailwind build-time risks, lockfile integrity, typosquatting | `references/config-components.md` |
 | Client-side business logic, price manipulation, rate limiting, error logging, Sentry, monitoring, SSRF, URL validation | `references/design-logging-ssrf.md` |
 
 **If the request spans multiple categories**, read all relevant files. For a full security audit, read all five.
@@ -39,7 +39,8 @@ Read the appropriate reference file based on what the user needs:
 1. Read all five reference files
 2. Use the Exploit → Prevention → Use Case structure for each topic
 3. Include PortSwigger vectors from `injection-xss.md` for realistic examples
-4. Organize by severity: Critical (A01, A02, A03, A07) → High (A04, A05, A06, A08, A10) → Medium (A09)
+4. Include Vue-specific supply-chain scenarios from `config-components.md` (section 5) for build-time and plugin risks
+5. Organize by severity: Critical (A01, A02, A03, A07) → High (A04, A05, A06, A08, A10, Supply Chain) → Medium (A09)
 
 ### When Auditing an Application
 Walk through this checklist, reading the corresponding reference for details:
@@ -54,6 +55,7 @@ Walk through this checklist, reading the corresponding reference for details:
 8. **Integrity (A08)** — Check CDN scripts for SRI, CI pipeline for lockfile enforcement → `data-integrity.md`
 9. **Logging (A09)** — Check for global error handler, auth failure tracking, CSP reporting → `design-logging-ssrf.md`
 10. **SSRF (A10)** — Find features accepting user URLs (import, preview, upload) → `design-logging-ssrf.md`
+11. **Supply Chain** — Audit Vite plugins, Vue plugins using `app.mixin()`, PostCSS chain, lockfile integrity → `config-components.md`
 
 ## Output Formats
 
@@ -73,3 +75,5 @@ Adapt output format to what the user needs:
 - **httpOnly cookies, not localStorage.** Any XSS makes localStorage tokens instantly exfiltrable.
 - **Validate on the server.** Client-side computed properties for prices, limits, or roles are trivially bypassed.
 - **Source maps expose everything.** Always set `sourcemap: false` for production builds.
+- **Vet Vite plugins like server middleware.** They run arbitrary Node.js at build time with full env access — a compromised plugin bypasses all runtime defenses.
+- **Prefer composables over app.use() plugins.** Global mixins from `app.use()` run inside every component silently; composables are explicitly scoped.
