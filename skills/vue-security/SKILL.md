@@ -1,6 +1,6 @@
 ---
 name: vue-security
-description: "Vue.js security analysis, auditing, and hardening using the OWASP Top 10. Use this skill whenever the user mentions Vue.js security, XSS in Vue, v-html vulnerabilities, client-side template injection (CSTI), Vue Router access control, JWT security in SPAs, Content Security Policy for Vue apps, or any request to audit, review, harden, or pentest a Vue.js application. Also trigger when the user asks about secure authentication patterns in Vue/Pinia, SSRF via Vue features, source map exposure, CORS misconfiguration in Vue+Express/Nuxt stacks, npm dependency auditing, supply-chain attacks in the Vue/Vite ecosystem, malicious Vite plugins, Vue plugin global mixin hijacking, PostCSS/Tailwind build-time risks, or lockfile integrity. Trigger even for general SPA security questions if Vue is the framework — this skill contains Vue-specific exploit vectors (PortSwigger script gadgets, mutation XSS, directive-based injection) and Vue-architecture-specific supply-chain risks that generic security advice misses."
+description: "Vue.js security analysis, auditing, and hardening using the OWASP Top 10. Trigger for XSS, v-html, CSTI, Vue Router access control, JWT/session storage, CSP, CORS, source maps, npm audit, supply-chain, Vite plugins, or any Vue.js security audit."
 ---
 
 # Vue.js Security — OWASP Top 10 Applied
