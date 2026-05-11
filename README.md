@@ -2,10 +2,12 @@
 
 A collection of agent skills for security, Vue.js, and more.
 
+[https://skills.sh/aleksmiller/skills](https://skills.sh/aleksmiller/skills)
+
 ## Installation
 
 ```sh
-npm skills add aleksmiller/skills --skill='*'
+npx skills add aleksmiller/skills
 ```
 
 ## Skills

@@ -12,6 +12,8 @@ Severity: **High** (A04, A10) / **Medium** (A09)
 
 ### Vulnerable Pattern
 ```js
+// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+/*
 // ❌ Price calculated in browser, sent to server
 const total = computed(() =>
   cart.items.reduce((sum, i) => sum + i.price * i.qty, 0)
@@ -38,6 +40,7 @@ const submitQuiz = () => {
   if (!canSubmit.value) return
   canSubmit.value = false // trivially bypassed
 }
+*/
 ```
 
 ### Secure Pattern
@@ -65,6 +68,8 @@ A learning platform checkout page calculates discounted prices client-side. A st
 
 ### Vulnerable Pattern
 ```js
+// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+/*
 // ❌ Errors swallowed — only visible in user's browser
 try {
   await submitAnswer(data)
@@ -78,6 +83,7 @@ try {
 //   - Rapid-fire API calls (scraping/abuse)
 //   - CSP violations (XSS attempts)
 //   - JavaScript errors in production
+*/
 ```
 
 ### Secure Pattern
@@ -133,27 +139,33 @@ An attacker runs credential-stuffing against the login endpoint for 3 weeks. No 
 ### Vulnerable Pattern
 ```vue
 <template>
-  <input v-model="importUrl" placeholder="Paste resource URL" />
-  <button @click="importResource">Import</button>
+  <!-- SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE -->
+  <!-- <input v-model="importUrl" placeholder="Paste resource URL" /> -->
+  <!-- <button @click="importResource">Import</button> -->
 </template>
 
 <script setup>
+// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+/*
 async function importResource() {
   // Backend fetches whatever URL user provides
   await axios.post('/api/import', { url: importUrl.value })
 }
+*/
 </script>
 ```
 
 ### Exploit Payloads
 ```
+# SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+
 # AWS metadata — steal IAM credentials
-http://169.254.169.254/latest/meta-data/iam/security-credentials/
+# http://169.254.169.254/latest/meta-data/iam/security-credentials/
 
 # Internal service probing
-http://localhost:6379/        # Redis
-http://localhost:27017/       # MongoDB
-http://internal-admin.corp:8080/api/users  # internal admin API
+# http://localhost:6379/        # Redis
+# http://localhost:27017/       # MongoDB
+# http://internal-admin.corp:8080/api/users  # internal admin API
 
 # DNS rebinding — bypass IP validation
 # (domain resolves to internal IP after initial DNS check passes)

