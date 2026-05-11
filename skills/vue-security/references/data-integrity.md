@@ -12,26 +12,21 @@ Severity: **Critical** (A02) / **High** (A08)
 
 ### Vulnerable Pattern
 ```env
-# SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
 # ❌ .env — these are compiled INTO the JS bundle
-# VITE_STRIPE_SECRET_KEY=sk_live_abc123...
-# VITE_DB_PASSWORD=supersecret
-# VITE_ADMIN_API_KEY=ak_prod_xyz789...
+VITE_STRIPE_SECRET_KEY=sk_live_abc123...
+VITE_DB_PASSWORD=supersecret
+VITE_ADMIN_API_KEY=ak_prod_xyz789...
 ```
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // ❌ Used directly in component
 const stripe = Stripe(import.meta.env.VITE_STRIPE_SECRET_KEY)
-*/
 ```
 
 ### Exploit
 ```bash
-# SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
 # After build, secrets are plaintext in the bundle
-# npm run build
-# grep -r "VITE_" dist/assets/*.js
+npm run build
+grep -r "VITE_" dist/assets/*.js
 # Or: browser Sources tab → search for "sk_live" / "api_key"
 ```
 
@@ -61,15 +56,12 @@ A developer stores `VITE_ADMIN_SECRET` in the .env file. Vite inlines it into th
 
 ### Vulnerable Pattern
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // ❌ Any XSS reads these instantly
 localStorage.setItem('access_token', jwt)
 sessionStorage.setItem('refresh_token', refreshJwt)
 
 // ❌ "Encrypted" storage is theater — key is in the JS
 localStorage.setItem('token', CryptoJS.AES.encrypt(jwt, 'key123'))
-*/
 ```
 
 ### Secure Pattern
@@ -94,10 +86,9 @@ const api = axios.create({ withCredentials: true })
 
 ### Vulnerable Pattern
 ```html
-<!-- SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE -->
 <!-- ❌ If CDN is compromised, all users execute attacker code -->
-<!-- <script src="https://cdn.example.com/chart.min.js"></script> -->
-<!-- <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script> -->
+<script src="https://cdn.example.com/chart.min.js"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 ```
 
 ### Secure Pattern
@@ -125,15 +116,12 @@ A learning platform loads a chart library from a public CDN without SRI. The CDN
 
 ### Vulnerable Pattern
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // ❌ Whatever is in localStorage goes directly into state
 const saved = localStorage.getItem('appState')
 if (saved) store.$patch(JSON.parse(saved))
 
 // Attacker sets via XSS or DevTools:
 // {"user":{"role":"admin","id":1},"features":{"billing":true}}
-*/
 ```
 
 ### Secure Pattern
@@ -161,18 +149,14 @@ try {
 
 ### Vulnerable Pattern
 ```bash
-# SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
 # ❌ Dependencies can change between builds
-# npm install              # resolves latest within semver range
-# npm run build && deploy
+npm install              # resolves latest within semver range
+npm run build && deploy
 ```
 ```json
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // ❌ Wildcard or loose versions
 "vue-markdown": "*",
 "lodash": "^4.0.0"    // could auto-upgrade to malicious patch
-*/
 ```
 
 ### Secure Pattern

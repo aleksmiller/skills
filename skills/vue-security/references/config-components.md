@@ -12,15 +12,12 @@ Severity: **High**
 
 ### Vulnerable Pattern
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // vite.config.js
 defineConfig({
   build: { sourcemap: true }
 })
 // Attacker loads: https://yoursite.com/assets/app-abc123.js.map
 // → Reconstructs every .vue file, route, API endpoint, feature flag
-*/
 ```
 
 ### Secure Pattern
@@ -51,8 +48,6 @@ A learning platform deploys with default Vite settings. An attacker loads the `.
 
 ### Vulnerable Pattern
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // ❌ Any origin can make cross-origin requests
 app.use(cors({ origin: '*' }))
 
@@ -61,7 +56,6 @@ app.use(cors({
   origin: req.headers.origin,
   credentials: true
 }))
-*/
 ```
 
 ### Secure Pattern
@@ -84,15 +78,12 @@ app.use(cors({
 
 ### Vulnerable Pattern
 ```
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
 // ❌ No Content-Security-Policy
 // ❌ No X-Frame-Options (clickjacking)
 // ❌ No Strict-Transport-Security (SSL stripping)
 // ❌ No X-Content-Type-Options (MIME sniffing)
 // ❌ Vue devtools enabled in production
-/*
 app.config.devtools = true
-*/
 ```
 
 ### Secure Pattern
@@ -124,8 +115,6 @@ app.config.performance = import.meta.env.DEV
 
 ### Vulnerable Pattern
 ```json
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 {
   "dependencies": {
     "vue": "2.6.11",         // EOL since Dec 2023, unpatched XSS
@@ -135,7 +124,6 @@ app.config.performance = import.meta.env.DEV
     "marked": "0.3.9",       // ReDoS + XSS via malformed markdown
   }
 }
-*/
 ```
 
 ### Secure Pattern
@@ -195,8 +183,6 @@ A Vite plugin runs arbitrary Node.js during the build process. It can read envir
 
 #### Vulnerable Pattern
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // vite.config.js
 import vue from '@vitejs/plugin-vue'
 import vueDevtols from 'vite-plugin-vue-devtols' // ← typosquat!
@@ -208,14 +194,11 @@ export default defineConfig({
     vueDevtols(), // ❌ runs arbitrary Node.js at build time
   ]
 })
-*/
 ```
 
 #### What a Malicious Vite Plugin Can Do
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
 // Inside the malicious plugin's transform() hook:
-/*
 export default function maliciousPlugin() {
   return {
     name: 'vite-plugin-vue-devtols',
@@ -235,7 +218,6 @@ export default function maliciousPlugin() {
     }
   }
 }
-*/
 ```
 
 #### Secure Pattern
@@ -266,21 +248,16 @@ When you call `app.use(plugin)`, the plugin can register global mixins, directiv
 
 #### Vulnerable Pattern
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // main.js
 import { createApp } from 'vue'
 import SomeAnalyticsPlugin from 'vue-analytics-tracker' // compromised
 
 const app = createApp(App)
 app.use(SomeAnalyticsPlugin) // ❌ grants full lifecycle access
-*/
 ```
 
 #### What a Malicious Vue Plugin Can Do
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // Inside the compromised plugin:
 export default {
   install(app) {
@@ -318,7 +295,6 @@ export default {
     })
   }
 }
-*/
 ```
 
 #### Secure Pattern
@@ -355,8 +331,6 @@ Most Vue projects use Tailwind CSS, which runs through PostCSS during the build.
 
 #### Vulnerable Pattern
 ```js
-// SECURITY EXAMPLE — intentionally vulnerable / DO NOT USE
-/*
 // postcss.config.js
 module.exports = {
   plugins: {
@@ -365,7 +339,6 @@ module.exports = {
     'postcss-obfuscator': {},  // ❌ unvetted PostCSS plugin
   }
 }
-*/
 ```
 
 A compromised PostCSS plugin can inject CSS that exfiltrates data (CSS-based keyloggers using `input[value^="a"]` selectors with background-image URLs), or it can use its Node.js execution context to read files and environment variables during the build.
