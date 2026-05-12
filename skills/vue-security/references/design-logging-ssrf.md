@@ -145,19 +145,13 @@ async function importResource() {
 </script>
 ```
 
-### Exploit Payloads
-```
-# AWS metadata — steal IAM credentials
-http://169.254.169.254/latest/meta-data/iam/security-credentials/
+### Exploit Scenarios
 
-# Internal service probing
-http://localhost:6379/        # Redis
-http://localhost:27017/       # MongoDB
-http://internal-admin.corp:8080/api/users  # internal admin API
+The following illustrate what attackers target when SSRF is possible:
 
-# DNS rebinding — bypass IP validation
-# (domain resolves to internal IP after initial DNS check passes)
-```
+- **Cloud metadata access**: Requesting `http://169.254.169.254/` paths to retrieve IAM credentials, instance metadata, or cloud provider secrets
+- **Internal service probing**: Targeting `localhost` or internal hostnames to reach databases (Redis, MongoDB), internal admin APIs, or other services not exposed externally
+- **DNS rebinding**: Using a domain that resolves to an internal IP after initial validation passes, bypassing IP-based allowlists
 
 ### Secure Pattern
 ```js
@@ -192,7 +186,7 @@ if (isPrivateIP(address)) throw new Error('Blocked')
 ```
 
 ### Use Case
-Teachers can "Import from URL" to add external learning resources. A malicious user submits `http://169.254.169.254/latest/meta-data/iam/security-credentials/`. The backend fetches it and returns AWS credentials — giving the attacker access to S3 buckets with student data, the RDS database, and the deployment pipeline.
+Teachers can "Import from URL" to add external learning resources. A malicious user submits a cloud metadata URL. The backend fetches it and returns cloud provider credentials — giving the attacker access to storage buckets with student data, the database, and the deployment pipeline.
 
 ### SSRF Defense Summary
 1. Allowlist specific domains server-side
