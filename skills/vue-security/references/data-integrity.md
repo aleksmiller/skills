@@ -13,9 +13,9 @@ Severity: **Critical** (A02) / **High** (A08)
 ### Vulnerable Pattern
 ```env
 # ❌ .env — these are compiled INTO the JS bundle
-VITE_STRIPE_SECRET_KEY=sk_live_abc123...
+VITE_STRIPE_SECRET_KEY=<your-secret-key>
 VITE_DB_PASSWORD=supersecret
-VITE_ADMIN_API_KEY=ak_prod_xyz789...
+VITE_ADMIN_API_KEY=<your-admin-key>
 ```
 ```js
 // ❌ Used directly in component
@@ -34,10 +34,10 @@ grep -r "VITE_" dist/assets/*.js
 ```env
 # ✅ Only public values get VITE_ prefix
 VITE_PUBLIC_API_URL=https://api.myapp.com
-VITE_PUBLIC_STRIPE_PUBLISHABLE=pk_live_...
+VITE_PUBLIC_STRIPE_PUBLISHABLE=<your-publishable-key>
 
 # ✅ Secrets stay server-side (NO VITE_ prefix — Vite ignores them)
-STRIPE_SECRET_KEY=sk_live_abc123...
+STRIPE_SECRET_KEY=<your-secret-key>
 DATABASE_URL=postgres://...
 ```
 ```js

